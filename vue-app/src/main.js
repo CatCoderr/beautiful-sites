@@ -6,7 +6,7 @@ import App from "./App.vue";
 import { useNewsStore } from "./stores/news";
 import { useGalleryStore } from "./stores/gallery";
 
-export const API_ENDPOINT = "https://api.catcoder.pl.ua";
+export const API_ENDPOINT = "https://api.mnx.pw";
 
 const pinia = createPinia();
 

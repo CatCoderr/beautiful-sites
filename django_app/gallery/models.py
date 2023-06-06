@@ -6,7 +6,7 @@ class ArtExhibition(models.Model):
     place = models.CharField(max_length=100)
     address = models.CharField(max_length=100, null=True)
     description = models.TextField()
-    source = models.CharField(max_length=100, null=True)
+    source = models.CharField(max_length=255, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 

@@ -1,0 +1,84 @@
+name: Build Vue App
+
+on:
+  push:
+
+env:
+  namespace: catcoder
+  image_url: ghcr.io/catcoderr/beautiful-sites-front
+
+
+concurrency:
+  group: frontend
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      short_sha: ${{ steps.short_sha.outputs.short_sha }}
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Get short SHA
+        id: short_sha
+        run: echo "::set-output name=short_sha::$(git rev-parse --short HEAD)"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.PACKAGE_REGISTRY_USERNAME }}
+          password: ${{ secrets.PACKAGE_REGISTRY_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v2
+        with:
+          context: vue-app
+          push: true
+          file: frontend.Dockerfile
+          tags: |
+            ${{ env.image_url }}:${{ steps.short_sha.outputs.short_sha }}
+            ${{ env.image_url }}:latest
+
+  deploy:
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install helm
+        uses: azure/setup-helm@v3
+        with:
+          id: install
+
+      - name: Add Kube Config
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          mkdir ~/.kube
+          echo "${KUBE_CONFIG}" | base64 --decode > ~/.kube/config
+
+      - name: Grant access to registry for Kubernetes
+        run: >
+          kubectl create secret docker-registry github-registry
+          -n ${{ env.namespace }}
+          --docker-server=ghcr.io 
+          --docker-username=${{ secrets.PACKAGE_REGISTRY_USERNAME }} 
+          --docker-password=${{ secrets.PACKAGE_REGISTRY_TOKEN }}
+          --dry-run=client
+          --output=yaml
+          | kubectl apply -f -
+
+
+      - name: Deploy to Kubernetes
+        run: >
+          helm upgrade beautiful-sites .helm/
+          --namespace=${{ env.namespace }}
+          --set=image.repository=${{ env.image_url }}
+          --set=image.tag=${{ needs.build.outputs.short_sha }}
+          --values=vue-app/values.yaml
+          --install
+        
+
